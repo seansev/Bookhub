@@ -724,6 +724,39 @@ def profile(profile_id):
         {"pid": profile_id}
     ).fetchall()
 
+    # Reading sessions (10 most recent)
+    reading_sessions = g.conn.execute(
+        text("""
+            SELECT
+                rs.session_id,
+                rs.book_id,
+                rs.started_at,
+                rs.ended_at,
+                rs.pages_read,
+                b.title
+            FROM reading_sessions rs
+            JOIN book b ON rs.book_id = b.book_id
+            WHERE rs.profile_id = :pid
+            ORDER BY rs.started_at DESC
+            LIMIT 10;
+        """),
+        {"pid": profile_id}
+    ).fetchall()
+
+    # Convert rows to dicts
+    sessions = []
+    for s in reading_sessions:
+        sm = getattr(s, "_mapping", s)
+        sessions.append({
+            "session_id": sm.get("session_id") if hasattr(sm, "get") else s[0],
+            "book_id": sm.get("book_id") if hasattr(sm, "get") else s[1],
+            "started_at": sm.get("started_at") if hasattr(sm, "get") else s[2],
+            "ended_at": sm.get("ended_at") if hasattr(sm, "get") else s[3],
+            "pages_read": sm.get("pages_read") if hasattr(sm, "get") else s[4],
+            "book_title": sm.get("title") if hasattr(sm, "get") else s[5],
+        })
+
+
     # show private bookshelves only to the profile owner (based on cookie)
     viewer = request.cookies.get('profile_id')
     try:
@@ -784,7 +817,8 @@ def profile(profile_id):
         is_owner=is_owner,
         has_view_bookshelf=has_view_bookshelf,
         tracked_books=tracked_books,
-        reviews=reviews
+        reviews=reviews,
+        reading_sessions=sessions
     )
 
 @app.route('/bookshelf/<int:bookshelf_id>')
