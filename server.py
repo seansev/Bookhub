@@ -211,6 +211,42 @@ def search():
             })
         cursor.close()
 
+    elif mode == "bookshelf":
+        # ...existing code...
+        cursor.close()
+
+    elif mode == "keywords":
+        # Search books by keywords array (matches any keyword element containing q, case-insensitive)
+        sql = text('''
+            SELECT
+                b.book_id AS id,
+                b.title AS title,
+                b.publication_year AS published_year,
+                b.image_url AS image_url,
+                COALESCE(string_agg(a.name, ', '), '') AS authors
+            FROM book b
+            LEFT JOIN written_by wb ON b.book_id = wb.book_id
+            LEFT JOIN author a ON wb.author_id = a.author_id
+            WHERE EXISTS (
+                SELECT 1 FROM unnest(b.keywords) AS k(kname)
+                WHERE k.kname ILIKE :p
+            )
+            GROUP BY b.book_id, b.title, b.publication_year, b.image_url
+            ORDER BY b.publication_year DESC NULLS LAST
+            LIMIT 50
+        ''')
+        cursor = g.conn.execute(sql, {"p": f"%{q}%"})
+        for row in cursor:
+            results.append({
+                "id": row.id,
+                "title": row.title,
+                "authors": row.authors,
+                "published_year": row.published_year,
+                "image_url": row.image_url,
+                "type": "book"
+            })
+        cursor.close()
+
     return render_template("index.html", results=results, query=q, mode=mode)
 
 @app.route('/book/<int:book_id>')
