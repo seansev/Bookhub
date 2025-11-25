@@ -109,6 +109,19 @@
               </form>
             {% endif %}
           </div>
+
+          <div id="reading-session-area" style="margin-top:16px;">
+            <button id="start-session-btn">Start Reading Session</button>
+
+            <div id="session-controls" style="display:none; gap:10px; align-items:center;">
+              <span id="session-timer" style="font-weight:bold;">00:00:00</span>
+
+              <button id="increment-page-btn">+1 page</button>
+              <span id="page-counter">0</span>
+
+              <button id="stop-session-btn" style="background:#b00020;color:white;">Stop</button>
+            </div>
+          </div>
         {% else %}
           <p style="margin-top:12px;"><a href="{{ url_for('login') }}">Log in</a> to track this book.</p>
         {% endif %}
@@ -295,5 +308,75 @@
     </div>
 
   {% endif %}
+
+  <script>
+    const initialPage = {{ (tracking.current_page or 0) | tojson }};
+    let pageCount = initialPage;
+    let sessionStartPage = initialPage; 
+    let timerInterval = null;
+    let startTime = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const startBtn = document.getElementById("start-session-btn");
+      const active = document.getElementById("session-controls");
+      const elapsed = document.getElementById("session-timer");
+      const pageDisplay = document.getElementById("page-counter");
+      const incBtn = document.getElementById("increment-page-btn");
+      const stopBtn = document.getElementById("stop-session-btn");
+
+      pageDisplay.textContent = pageCount;
+
+      let sessionId = null;
+
+      startBtn?.addEventListener("click", async () => {
+        const resp = await fetch("{{ url_for('start_session', book_id=book.id) }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: {{ book.id }} })
+        });
+
+        const data = await resp.json();
+        sessionId = data.session_id;
+
+        startBtn.style.display = "none";
+        active.style.display = "flex";
+
+        startTime = new Date();
+        timerInterval = setInterval(() => {
+          const diff = Math.floor((Date.now() - startTime) / 1000);
+          const h = Math.floor(diff / 3600);
+          const m = Math.floor((diff % 3600) / 60);
+          const s = diff % 60;
+          elapsed.textContent =
+            h.toString().padStart(2, "0") + ":" +
+            m.toString().padStart(2, "0") + ":" +
+            s.toString().padStart(2, "0");
+        }, 1000);
+      });
+
+      incBtn?.addEventListener("click", () => {
+        pageCount++;
+        pageDisplay.textContent = pageCount;
+      });
+
+      stopBtn?.addEventListener("click", async () => {
+        clearInterval(timerInterval);
+        
+        const pagesRead = pageCount - sessionStartPage;
+
+        await fetch("{{ url_for('stop_session') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            book_id: {{ book.id }},
+            pages_read: pagesRead
+          })
+        });
+
+        location.reload();
+      });
+    });
+  </script>
 </body>
 </html>

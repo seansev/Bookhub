@@ -511,6 +511,86 @@ def delete_review(book_id):
 
     return redirect(url_for('book', book_id=book_id))
 
+@app.route('/api/start_session/<int:book_id>', methods=['POST'])
+def start_session(book_id):
+    pid = request.cookies.get('profile_id')
+    if not pid:
+        return {"error": "not_logged_in"}, 401
+
+    # Ensure tracking exists & set to reading if not
+    g.conn.execute(text("""
+        INSERT INTO is_tracking (profile_id, book_id, status)
+        VALUES (:pid, :bid, 'reading')
+        ON CONFLICT (profile_id, book_id)
+            DO UPDATE SET status='reading';
+    """), {"pid": int(pid), "bid": book_id})
+
+    # Insert new session
+    row = g.conn.execute(text("""
+        INSERT INTO reading_sessions (profile_id, book_id, started_at)
+        VALUES (:pid, :bid, CURRENT_TIMESTAMP)
+        RETURNING session_id, started_at
+    """), {"pid": int(pid), "bid": book_id}).fetchone()
+
+    g.conn.commit()
+
+    return {
+        "session_id": row.session_id,
+        "started_at": str(row.started_at)
+    }
+
+@app.route('/api/stop_session', methods=['POST'])
+def stop_session():
+    pid = request.cookies.get('profile_id')
+    if not pid:
+        return {"error": "not_logged_in"}, 401
+
+    data = request.get_json()
+    session_id = data.get("session_id")
+    pages_read = data.get("pages_read")
+    book_id = data.get("book_id")
+
+    # Update reading session
+    g.conn.execute(text("""
+        UPDATE reading_sessions
+        SET ended_at = CURRENT_TIMESTAMP,
+            pages_read = :pg
+        WHERE session_id = :sid AND profile_id = :pid;
+    """), {"sid": session_id, "pid": int(pid), "pg": pages_read})
+
+    # Fetch current page count + total pages
+    row = g.conn.execute(text("""
+        SELECT current_page
+        FROM is_tracking
+        WHERE profile_id = :pid AND book_id = :bid;
+    """), {"pid": int(pid), "bid": book_id}).fetchone()
+    curr = row.current_page if row else 0
+
+    new_page = curr + pages_read
+
+    # Get total book pages
+    total = g.conn.execute(text("""
+        SELECT page_count
+        FROM book
+        WHERE book_id = :bid;
+    """), {"bid": book_id}).fetchone().page_count
+
+    status = "finished" if new_page >= total else "reading"
+
+    # Update tracking
+    g.conn.execute(text("""
+        UPDATE is_tracking
+        SET current_page = :pg,
+            status = :st,
+            finish_date = CASE WHEN :st = 'finished' THEN CURRENT_DATE ELSE NULL END
+        WHERE profile_id = :pid AND book_id = :bid;
+    """), {"pg": new_page, "st": status, "pid": int(pid), "bid": book_id})
+
+    g.conn.commit()
+
+    return {"ok": True, "status": status, "new_page": new_page}
+
+
 @app.route('/author/<int:author_id>', methods=['GET', 'POST'])
 def author(author_id):
     current_user_id = request.cookies.get('profile_id')
