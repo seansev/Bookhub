@@ -1,8 +1,6 @@
-jj3489, ssw2163
+# Bookhub
 
-**PostgreSQL account:** ssw2163
-
-**Web Application URL:** [http://35.196.229.98:8111](http://35.196.229.98:8111/)
+Serves an interactive book-reading social media site. Data is stored in PostgreSQL and pages are generated and served using Flask and Jinja2.
 
 **Original Proposal Comparison**
 
