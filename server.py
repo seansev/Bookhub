@@ -9,6 +9,7 @@ A debugger such as "pdb" may be helpful for debugging.
 Read about it online.
 """
 import os
+from dotenv import load_dotenv
 # accessible as a variable in index.html:
 from sqlalchemy import *
 from sqlalchemy.pool import NullPool
@@ -30,9 +31,10 @@ app = Flask(__name__, template_folder=tmpl_dir)
 #     DATABASEURI = "postgresql://ab1234:123123@34.139.8.30/proj1part2"
 #
 # Modify these with your own credentials you received from TA!
-DATABASE_USERNAME = "ssw2163"
-DATABASE_PASSWRD = "goodreads"
-DATABASE_HOST = "34.139.8.30"
+load_dotenv()
+DATABASE_USERNAME = os.getenv("DATABASE_USERNAME")
+DATABASE_PASSWRD = os.getenv("DATABASE_PASSWORD")
+DATABASE_HOST = os.getenv("DATABASE_HOST")
 DATABASEURI = f"postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWRD}@{DATABASE_HOST}/proj1part2"
 
 
